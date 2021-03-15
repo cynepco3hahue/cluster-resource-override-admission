@@ -31,12 +31,16 @@ type ClusterResourceOverrideSpec struct {
 
 	// MemoryRequestToLimitPercent (if > 0) overrides memory request to a percentage of memory limit
 	MemoryRequestToLimitPercent int64 `json:"memoryRequestToLimitPercent"`
+
+	// CPURequestPercent (if > 0) overrides CPU request to a percentage specified by the parameter
+	CPURequestPercent int64 `json:"cpuRequestPercent"`
 }
 
 type Config struct {
 	LimitCPUToMemoryRatio     float64
 	CpuRequestToLimitRatio    float64
 	MemoryRequestToLimitRatio float64
+	CPURequestPercent         float64
 }
 
 func (c *Config) String() string {
@@ -49,6 +53,7 @@ func ConvertExternalConfig(object *ClusterResourceOverride) *Config {
 		LimitCPUToMemoryRatio:     float64(object.Spec.LimitCPUToMemoryPercent) / 100,
 		CpuRequestToLimitRatio:    float64(object.Spec.CPURequestToLimitPercent) / 100,
 		MemoryRequestToLimitRatio: float64(object.Spec.MemoryRequestToLimitPercent) / 100,
+		CPURequestPercent:         float64(object.Spec.CPURequestPercent) / 100,
 	}
 }
 

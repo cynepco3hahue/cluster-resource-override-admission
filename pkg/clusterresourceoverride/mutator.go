@@ -2,11 +2,16 @@ package clusterresourceoverride
 
 import (
 	"errors"
+	"fmt"
+
+	"github.com/openshift/cluster-resource-override-admission/pkg/api"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog"
 )
+
+var AnnotationPodScaled = fmt.Sprintf("%s.%s/scaled", Resource, api.Group)
 
 type CPUMemory struct {
 	CPU    *resource.Quantity
@@ -46,6 +51,8 @@ func (m *podMutator) Mutate(in *corev1.Pod) (out *corev1.Pod, err error) {
 		m.Override(&current.Spec.Containers[i])
 	}
 
+	m.setScaleAnnotation(current.Annotations)
+
 	out = current
 	return
 }
@@ -57,6 +64,8 @@ func (m *podMutator) Override(container *corev1.Container) {
 	m.OverrideCPULimit(&container.Resources)
 
 	m.OverrideCPU(&container.Resources)
+
+	m.OverrideCPURequest(&container.Resources)
 }
 
 // If a container memory limit has been specified or defaulted, the memory request
@@ -171,6 +180,24 @@ func (m *podMutator) OverrideCPU(resources *corev1.ResourceRequirements) {
 	resources.Requests[corev1.ResourceCPU] = *overridden
 }
 
+// If a container CPU limit has been specified or defaulted, the CPU request is
+// overridden to this percentage of the limit.
+func (m *podMutator) OverrideCPURequest(resources *corev1.ResourceRequirements) {
+	request, found := resources.Requests[corev1.ResourceCPU]
+	if !found {
+		return
+	}
+
+	if m.config.CPURequestPercent == 0 {
+		return
+	}
+
+	amount := float64(request.MilliValue()) * m.config.CPURequestPercent
+	overridden := resource.NewMilliQuantity(int64(amount), request.Format)
+
+	resources.Requests[corev1.ResourceCPU] = *overridden
+}
+
 func (m *podMutator) IsCpuFloorSpecified() bool {
 	return m.floor != nil && m.floor.CPU != nil
 }
@@ -197,4 +224,11 @@ func ensureLimits(resources *corev1.ResourceRequirements) {
 	if len(resources.Limits) == 0 {
 		resources.Limits = corev1.ResourceList{}
 	}
+}
+
+func (m *podMutator) setScaleAnnotation(podAnnotations map[string]string) {
+	if podAnnotations == nil {
+		podAnnotations = map[string]string{}
+	}
+	podAnnotations[AnnotationPodScaled] = "true"
 }
